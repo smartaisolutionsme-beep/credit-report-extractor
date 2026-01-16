@@ -3,9 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Financial Report Extractor</title>
+    <title>Financial Report Extractor (PDF + Image)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src='https://unpkg.com/tesseract.js@v4.0.1/dist/tesseract.min.js'></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
     <style>
         .loader { border-top-color: #3b82f6; animation: spinner 1.5s linear infinite; }
         @keyframes spinner { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
@@ -16,22 +17,22 @@
     <div class="max-w-4xl mx-auto">
         <div class="bg-white rounded-2xl shadow-2xl overflow-hidden border border-slate-200">
             <header class="bg-slate-900 p-8 text-white">
-                <h1 class="text-3xl font-extrabold tracking-tight italic text-blue-400">Financial Account <span class="text-white">Summary</span></h1>
-                <p class="text-slate-400 mt-1">Extracting providers, balances, and judgments from screenshots</p>
+                <h1 class="text-3xl font-extrabold tracking-tight italic text-blue-400">Financial <span class="text-white">Full Extractor</span></h1>
+                <p class="text-slate-400 mt-1">Supports PDF, PNG, and JPG TransUnion Reports</p>
             </header>
 
             <div class="p-6 md:p-8">
                 <div class="mb-8 p-10 border-2 border-dashed border-slate-300 bg-slate-50 rounded-2xl text-center hover:border-blue-500 hover:bg-blue-50 transition-all cursor-pointer">
-                    <input type="file" id="imageUpload" accept="image/*" class="hidden" multiple>
+                    <input type="file" id="imageUpload" accept="image/*,application/pdf" class="hidden" multiple>
                     <label for="imageUpload" class="cursor-pointer block">
-                        <div class="text-slate-700 font-bold text-xl">Upload Credit Report Images</div>
-                        <div class="text-sm text-slate-500 mt-2 italic">Select all report pages (Accounts & Public Info)</div>
+                        <div class="text-slate-700 font-bold text-xl">Upload Report (PDF or Images)</div>
+                        <div class="text-sm text-slate-500 mt-2 italic">Drag & drop your files here</div>
                     </label>
                 </div>
 
                 <div id="status" class="hidden flex flex-col items-center py-10">
                     <div class="loader ease-linear rounded-full border-4 border-t-4 border-slate-200 h-12 w-12 mb-4"></div>
-                    <p class="text-slate-600 font-medium animate-pulse" id="statusText">Scanning documents...</p>
+                    <p class="text-slate-600 font-medium animate-pulse" id="statusText">Scanning...</p>
                 </div>
 
                 <div id="resultArea" class="hidden space-y-6">
@@ -66,6 +67,8 @@
     </div>
 
     <script>
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
+
         const imageUpload = document.getElementById('imageUpload');
         const status = document.getElementById('status');
         const statusText = document.getElementById('statusText');
@@ -87,8 +90,14 @@
             grandTotal = 0;
 
             for (let i = 0; i < files.length; i++) {
-                statusText.innerText = `Reading file ${i + 1} of ${files.length}...`;
-                await processImage(files[i]);
+                const file = files[i];
+                statusText.innerText = `Processing ${file.name}...`;
+
+                if (file.type === "application/pdf") {
+                    await processPdf(file);
+                } else {
+                    await processImage(file);
+                }
             }
 
             status.classList.add('hidden');
@@ -96,18 +105,35 @@
             totalValue.innerText = `£${grandTotal.toLocaleString()}`;
         });
 
-        async function processImage(file) {
+        async function processPdf(file) {
+            const arrayBuffer = await file.arrayBuffer();
+            const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
+            
+            for (let i = 1; i <= pdf.numPages; i++) {
+                statusText.innerText = `Scanning PDF Page ${i} of ${pdf.numPages}...`;
+                const page = await pdf.getPage(i);
+                const viewport = page.getViewport({ scale: 2.0 });
+                const canvas = document.createElement('canvas');
+                const context = canvas.getContext('2d');
+                canvas.height = viewport.height;
+                canvas.width = viewport.width;
+
+                await page.render({ canvasContext: context, viewport: viewport }).promise;
+                await processImage(canvas);
+            }
+        }
+
+        async function processImage(source) {
             const worker = await Tesseract.createWorker();
             await worker.loadLanguage('eng');
             await worker.initialize('eng');
             
-            const { data: { lines } } = await worker.recognize(file);
+            const { data: { lines } } = await worker.recognize(source);
             let currentJudgment = { case: null, amount: null };
 
             lines.forEach((line) => {
                 const text = line.text.trim();
 
-                // 1. JUDGMENT DETECTION (CCJs)
                 const caseMatch = text.match(/([A-Z][A-Z0-9]{7,10})/);
                 if (caseMatch && !text.includes(" ")) currentJudgment.case = caseMatch[1];
 
@@ -119,12 +145,10 @@
                     currentJudgment = { case: null, amount: null };
                 }
 
-                // 2. ACCOUNT DETECTION (Provider — £Amount)
                 const accountMatch = text.match(/([A-Za-z0-9\s&]{3,})\s*[—\-–]?\s*£([\d,]+)/);
                 if (accountMatch && !text.includes("Amount")) {
                     const provider = accountMatch[1].trim();
                     const amount = parseFloat(accountMatch[2].replace(',', ''));
-                    
                     if (!isNaN(amount) && provider.length < 50 && !provider.match(/Date report/i)) {
                         addAccountRow(provider, amount);
                         grandTotal += amount;
@@ -154,19 +178,13 @@
 
         document.getElementById('copyBtn').addEventListener('click', () => {
             let output = "Financial Account Summary\n\n";
-            
-            // Collect Accounts
             document.querySelectorAll('.account-row').forEach(el => {
                 output += `${el.getAttribute('data-name')} — £${el.getAttribute('data-price')}\n`;
             });
-
-            // Collect CCJs
             document.querySelectorAll('.ccj-row').forEach(el => {
                 output += `CCJ Case ${el.getAttribute('data-case')} — £${el.getAttribute('data-amount')}\n`;
             });
-
             output += `\nTotal Outstanding Liabilities — £${totalValue.innerText.replace('£', '')}`;
-
             navigator.clipboard.writeText(output).then(() => {
                 alert('Summary copied as plain text!');
             });
