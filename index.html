@@ -37,7 +37,7 @@
                 </div>
 
                 <div id="resultArea" class="hidden space-y-6">
-                    <div id="outputContent" class="bg-slate-900 rounded-xl p-8 text-slate-300 font-mono text-sm leading-relaxed">
+                    <div id="outputContent" class="bg-slate-900 rounded-xl p-8 text-slate-300 font-mono text-sm leading-relaxed shadow-2xl border border-slate-700">
                         <h2 class="text-white text-xl font-bold mb-6 border-b border-slate-700 pb-4">Financial Account Summary</h2>
                         
                         <div class="space-y-8">
@@ -52,7 +52,7 @@
                             </section>
 
                             <div class="pt-6 border-t border-slate-700 flex justify-between items-end text-white">
-                                <span class="text-slate-400 font-bold">TOTAL OUTSTANDING LIABILITIES:</span>
+                                <span class="text-slate-400 font-bold uppercase tracking-widest text-xs">Total Outstanding Liabilities:</span>
                                 <span id="totalValue" class="text-4xl font-black text-yellow-400">£0</span>
                             </div>
                         </div>
@@ -81,18 +81,15 @@
         imageUpload.addEventListener('change', async (e) => {
             const files = e.target.files;
             if (!files.length) return;
-
             status.classList.remove('hidden');
             resultArea.classList.add('hidden');
             accountsList.innerHTML = '';
             ccjList.innerHTML = '';
             grandTotal = 0;
-
             for (let i = 0; i < files.length; i++) {
                 statusText.innerText = `Analyzing document ${i + 1} of ${files.length}...`;
                 await processImage(files[i]);
             }
-
             status.classList.add('hidden');
             resultArea.classList.remove('hidden');
             totalValue.innerText = `£${grandTotal.toLocaleString()}`;
@@ -102,20 +99,15 @@
             const worker = await Tesseract.createWorker();
             await worker.loadLanguage('eng');
             await worker.initialize('eng');
-            
             const { data: { lines } } = await worker.recognize(file);
             let currentJudgment = { case: null, date: null, amount: null };
 
             lines.forEach((line) => {
                 const text = line.text.trim();
-
-                // CCJ DETECTION
                 const caseMatch = text.match(/([A-Z][A-Z0-9]{7,10})/);
                 if (caseMatch && !text.includes(" ")) currentJudgment.case = caseMatch[1];
-
                 const dateMatch = text.match(/date\s*(\d{2}\/\d{2}\/\d{4})/i);
                 if (dateMatch) currentJudgment.date = dateMatch[1];
-
                 const ccjAmtMatch = text.match(/Amount\s*£([\d,]+)/i);
                 if (ccjAmtMatch) {
                     currentJudgment.amount = parseFloat(ccjAmtMatch[1].replace(',', ''));
@@ -123,14 +115,11 @@
                     grandTotal += currentJudgment.amount;
                     currentJudgment = { case: null, date: null, amount: null };
                 }
-
-                // ACCOUNT DETECTION
                 const accountMatch = text.match(/([A-Za-z0-9\s&]{3,})\s*[—\-–]?\s*£([\d,]+)/);
                 if (accountMatch && !text.includes("Amount")) {
                     const provider = accountMatch[1].trim();
                     const amount = parseFloat(accountMatch[2].replace(',', ''));
                     const statusType = text.match(/(Default|Late payment|Up to date)/i);
-                    
                     if (!isNaN(amount) && provider.length < 50 && !provider.match(/Date/i)) {
                         addAccountRow(provider, amount, statusType ? statusType[0] : "Known");
                         grandTotal += amount;
@@ -143,14 +132,20 @@
         function addAccountRow(name, price, status) {
             const div = document.createElement('div');
             const statusClass = status.includes("Default") ? "text-red-500" : "text-slate-500";
-            div.className = "flex justify-between py-1 border-b border-slate-800/50";
+            div.className = "flex justify-between py-1 border-b border-slate-800/50 account-item";
+            div.setAttribute('data-name', name);
+            div.setAttribute('data-price', price.toLocaleString());
+            div.setAttribute('data-status', status);
             div.innerHTML = `<span>${name} <span class="text-[10px] uppercase ml-2 ${statusClass}">[${status}]</span></span> <span class="text-white">£${price.toLocaleString()}</span>`;
             accountsList.appendChild(div);
         }
 
         function addCCJRow(caseNum, date, amount) {
             const div = document.createElement('div');
-            div.className = "bg-slate-800/40 p-4 rounded-lg border border-slate-700";
+            div.className = "bg-slate-800/40 p-4 rounded-lg border border-slate-700 ccj-item";
+            div.setAttribute('data-case', caseNum);
+            div.setAttribute('data-date', date);
+            div.setAttribute('data-amount', amount.toLocaleString());
             div.innerHTML = `
                 <div class="flex justify-between">
                     <div>
@@ -167,9 +162,27 @@
             ccjList.appendChild(div);
         }
 
+        // NEW FIX: Constructed Plain Text Summary
         document.getElementById('copyBtn').addEventListener('click', () => {
-            navigator.clipboard.writeText(document.getElementById('outputContent').innerText);
-            alert('Summary copied!');
+            let textOutput = "FINANCIAL ACCOUNT SUMMARY\n";
+            textOutput += "---------------------------------\n\n";
+
+            textOutput += "💳 ACCOUNTS & CREDIT CARDS:\n";
+            document.querySelectorAll('.account-item').forEach(el => {
+                textOutput += `${el.getAttribute('data-name')} [${el.getAttribute('data-status')}] — £${el.getAttribute('data-price')}\n`;
+            });
+
+            textOutput += "\n🏛️ COURT JUDGMENTS (CCJs):\n";
+            document.querySelectorAll('.ccj-item').forEach(el => {
+                textOutput += `Case Ref: ${el.getAttribute('data-case')} | Date: ${el.getAttribute('data-date')} | Amount: £${el.getAttribute('data-amount')}\n`;
+            });
+
+            textOutput += "\n---------------------------------\n";
+            textOutput += `TOTAL OUTSTANDING LIABILITIES: £${totalValue.innerText.replace('£','')}\n`;
+
+            navigator.clipboard.writeText(textOutput).then(() => {
+                alert('Clean plain-text summary copied!');
+            });
         });
     </script>
 </body>
