@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TransUnion Report Extractor</title>
+    <title>Financial Report Extractor</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src='https://unpkg.com/tesseract.js@v4.0.1/dist/tesseract.min.js'></script>
     <style>
@@ -15,34 +15,32 @@
 
     <div class="max-w-4xl mx-auto">
         <div class="bg-white rounded-2xl shadow-2xl overflow-hidden border border-slate-200">
-            <header class="bg-slate-900 p-8 text-white flex justify-between items-center">
-                <div>
-                    <h1 class="text-3xl font-extrabold tracking-tight italic text-blue-400">Statutory Report <span class="text-white">Analyzer</span></h1>
-                    <p class="text-slate-400 mt-1">Extracts Accounts, Statuses, and CCJs</p>
-                </div>
+            <header class="bg-slate-900 p-8 text-white">
+                <h1 class="text-3xl font-extrabold tracking-tight italic text-blue-400">Financial Account <span class="text-white">Summary</span></h1>
+                <p class="text-slate-400 mt-1">Extracting providers, balances, and judgments from screenshots</p>
             </header>
 
             <div class="p-6 md:p-8">
                 <div class="mb-8 p-10 border-2 border-dashed border-slate-300 bg-slate-50 rounded-2xl text-center hover:border-blue-500 hover:bg-blue-50 transition-all cursor-pointer">
                     <input type="file" id="imageUpload" accept="image/*" class="hidden" multiple>
                     <label for="imageUpload" class="cursor-pointer block">
-                        <div class="text-slate-700 font-bold text-xl">Upload or Drop Screenshots</div>
-                        <div class="text-sm text-slate-500 mt-2 italic">Select multiple images (Accounts + Public Information)</div>
+                        <div class="text-slate-700 font-bold text-xl">Upload Credit Report Images</div>
+                        <div class="text-sm text-slate-500 mt-2 italic">Select all report pages (Accounts & Public Info)</div>
                     </label>
                 </div>
 
                 <div id="status" class="hidden flex flex-col items-center py-10">
                     <div class="loader ease-linear rounded-full border-4 border-t-4 border-slate-200 h-12 w-12 mb-4"></div>
-                    <p class="text-slate-600 font-medium animate-pulse" id="statusText">Scanning...</p>
+                    <p class="text-slate-600 font-medium animate-pulse" id="statusText">Scanning documents...</p>
                 </div>
 
                 <div id="resultArea" class="hidden space-y-6">
-                    <div id="outputContent" class="bg-slate-900 rounded-xl p-8 text-slate-300 font-mono text-sm leading-relaxed shadow-2xl border border-slate-700">
+                    <div id="outputContent" class="bg-slate-900 rounded-xl p-8 text-slate-300 font-mono text-sm shadow-2xl">
                         <h2 class="text-white text-xl font-bold mb-6 border-b border-slate-700 pb-4">Financial Account Summary</h2>
                         
                         <div class="space-y-8">
                             <section>
-                                <h3 class="text-blue-400 font-bold uppercase text-xs mb-4">💳 Accounts & Credit Cards</h3>
+                                <h3 class="text-blue-400 font-bold uppercase text-xs mb-4">💳 Providers and Balances</h3>
                                 <div id="accountsList" class="space-y-2 border-l-2 border-slate-800 ml-2 pl-4"></div>
                             </section>
 
@@ -59,8 +57,8 @@
                     </div>
 
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <button onclick="window.print()" class="bg-white border-2 border-slate-200 py-3 rounded-xl font-bold hover:bg-slate-50 transition-all">Print PDF</button>
-                        <button id="copyBtn" class="bg-blue-600 text-white py-3 rounded-xl font-bold hover:bg-blue-700 shadow-lg">Copy Summary Text</button>
+                        <button onclick="window.print()" class="bg-white border-2 border-slate-200 py-3 rounded-xl font-bold hover:bg-slate-50">Print to PDF</button>
+                        <button id="copyBtn" class="bg-blue-600 text-white py-3 rounded-xl font-bold hover:bg-blue-700">Copy Summary Text</button>
                     </div>
                 </div>
             </div>
@@ -81,15 +79,18 @@
         imageUpload.addEventListener('change', async (e) => {
             const files = e.target.files;
             if (!files.length) return;
+
             status.classList.remove('hidden');
             resultArea.classList.add('hidden');
             accountsList.innerHTML = '';
             ccjList.innerHTML = '';
             grandTotal = 0;
+
             for (let i = 0; i < files.length; i++) {
-                statusText.innerText = `Analyzing document ${i + 1} of ${files.length}...`;
+                statusText.innerText = `Reading file ${i + 1} of ${files.length}...`;
                 await processImage(files[i]);
             }
+
             status.classList.add('hidden');
             resultArea.classList.remove('hidden');
             totalValue.innerText = `£${grandTotal.toLocaleString()}`;
@@ -99,29 +100,33 @@
             const worker = await Tesseract.createWorker();
             await worker.loadLanguage('eng');
             await worker.initialize('eng');
+            
             const { data: { lines } } = await worker.recognize(file);
-            let currentJudgment = { case: null, date: null, amount: null };
+            let currentJudgment = { case: null, amount: null };
 
             lines.forEach((line) => {
                 const text = line.text.trim();
+
+                // 1. JUDGMENT DETECTION (CCJs)
                 const caseMatch = text.match(/([A-Z][A-Z0-9]{7,10})/);
                 if (caseMatch && !text.includes(" ")) currentJudgment.case = caseMatch[1];
-                const dateMatch = text.match(/date\s*(\d{2}\/\d{2}\/\d{4})/i);
-                if (dateMatch) currentJudgment.date = dateMatch[1];
+
                 const ccjAmtMatch = text.match(/Amount\s*£([\d,]+)/i);
                 if (ccjAmtMatch) {
                     currentJudgment.amount = parseFloat(ccjAmtMatch[1].replace(',', ''));
-                    addCCJRow(currentJudgment.case || "N/A", currentJudgment.date || "N/A", currentJudgment.amount);
+                    addCCJRow(currentJudgment.case || "N/A", currentJudgment.amount);
                     grandTotal += currentJudgment.amount;
-                    currentJudgment = { case: null, date: null, amount: null };
+                    currentJudgment = { case: null, amount: null };
                 }
+
+                // 2. ACCOUNT DETECTION (Provider — £Amount)
                 const accountMatch = text.match(/([A-Za-z0-9\s&]{3,})\s*[—\-–]?\s*£([\d,]+)/);
                 if (accountMatch && !text.includes("Amount")) {
                     const provider = accountMatch[1].trim();
                     const amount = parseFloat(accountMatch[2].replace(',', ''));
-                    const statusType = text.match(/(Default|Late payment|Up to date)/i);
-                    if (!isNaN(amount) && provider.length < 50 && !provider.match(/Date/i)) {
-                        addAccountRow(provider, amount, statusType ? statusType[0] : "Known");
+                    
+                    if (!isNaN(amount) && provider.length < 50 && !provider.match(/Date report/i)) {
+                        addAccountRow(provider, amount);
                         grandTotal += amount;
                     }
                 }
@@ -129,59 +134,41 @@
             await worker.terminate();
         }
 
-        function addAccountRow(name, price, status) {
+        function addAccountRow(name, price) {
             const div = document.createElement('div');
-            const statusClass = status.includes("Default") ? "text-red-500" : "text-slate-500";
-            div.className = "flex justify-between py-1 border-b border-slate-800/50 account-item";
+            div.className = "flex justify-between py-1 border-b border-slate-800/50 account-row";
             div.setAttribute('data-name', name);
             div.setAttribute('data-price', price.toLocaleString());
-            div.setAttribute('data-status', status);
-            div.innerHTML = `<span>${name} <span class="text-[10px] uppercase ml-2 ${statusClass}">[${status}]</span></span> <span class="text-white">£${price.toLocaleString()}</span>`;
+            div.innerHTML = `<span>${name}</span> <span class="text-white">£${price.toLocaleString()}</span>`;
             accountsList.appendChild(div);
         }
 
-        function addCCJRow(caseNum, date, amount) {
+        function addCCJRow(caseNum, amount) {
             const div = document.createElement('div');
-            div.className = "bg-slate-800/40 p-4 rounded-lg border border-slate-700 ccj-item";
+            div.className = "bg-slate-800/40 p-3 rounded-lg border border-slate-700 ccj-row";
             div.setAttribute('data-case', caseNum);
-            div.setAttribute('data-date', date);
             div.setAttribute('data-amount', amount.toLocaleString());
-            div.innerHTML = `
-                <div class="flex justify-between">
-                    <div>
-                        <div class="text-[10px] text-slate-500 uppercase font-bold">Case Ref</div>
-                        <div class="text-blue-400 font-bold">${caseNum}</div>
-                        <div class="text-[10px] text-slate-500 uppercase font-bold mt-2">Date</div>
-                        <div class="text-slate-300 text-xs">${date}</div>
-                    </div>
-                    <div class="text-right">
-                        <div class="text-[10px] text-red-500 uppercase font-bold">CCJ Amount</div>
-                        <div class="text-xl font-black text-white">£${amount.toLocaleString()}</div>
-                    </div>
-                </div>`;
+            div.innerHTML = `<div class="flex justify-between"><span>CCJ (${caseNum})</span><span class="text-white font-bold">£${amount.toLocaleString()}</span></div>`;
             ccjList.appendChild(div);
         }
 
-        // NEW FIX: Constructed Plain Text Summary
         document.getElementById('copyBtn').addEventListener('click', () => {
-            let textOutput = "FINANCIAL ACCOUNT SUMMARY\n";
-            textOutput += "---------------------------------\n\n";
-
-            textOutput += "💳 ACCOUNTS & CREDIT CARDS:\n";
-            document.querySelectorAll('.account-item').forEach(el => {
-                textOutput += `${el.getAttribute('data-name')} [${el.getAttribute('data-status')}] — £${el.getAttribute('data-price')}\n`;
+            let output = "Financial Account Summary\n\n";
+            
+            // Collect Accounts
+            document.querySelectorAll('.account-row').forEach(el => {
+                output += `${el.getAttribute('data-name')} — £${el.getAttribute('data-price')}\n`;
             });
 
-            textOutput += "\n🏛️ COURT JUDGMENTS (CCJs):\n";
-            document.querySelectorAll('.ccj-item').forEach(el => {
-                textOutput += `Case Ref: ${el.getAttribute('data-case')} | Date: ${el.getAttribute('data-date')} | Amount: £${el.getAttribute('data-amount')}\n`;
+            // Collect CCJs
+            document.querySelectorAll('.ccj-row').forEach(el => {
+                output += `CCJ Case ${el.getAttribute('data-case')} — £${el.getAttribute('data-amount')}\n`;
             });
 
-            textOutput += "\n---------------------------------\n";
-            textOutput += `TOTAL OUTSTANDING LIABILITIES: £${totalValue.innerText.replace('£','')}\n`;
+            output += `\nTotal Outstanding Liabilities — £${totalValue.innerText.replace('£', '')}`;
 
-            navigator.clipboard.writeText(textOutput).then(() => {
-                alert('Clean plain-text summary copied!');
+            navigator.clipboard.writeText(output).then(() => {
+                alert('Summary copied as plain text!');
             });
         });
     </script>
