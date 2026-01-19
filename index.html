@@ -3,13 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Financial Report Extractor (PDF + Image)</title>
+    <title>Financial Report Extractor Pro</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src='https://unpkg.com/tesseract.js@v4.0.1/dist/tesseract.min.js'></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
     <style>
         .loader { border-top-color: #3b82f6; animation: spinner 1.5s linear infinite; }
         @keyframes spinner { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .hidden-canvas { display: none; }
     </style>
 </head>
 <body class="bg-slate-50 min-h-screen p-4 md:p-8 font-sans">
@@ -17,22 +18,22 @@
     <div class="max-w-4xl mx-auto">
         <div class="bg-white rounded-2xl shadow-2xl overflow-hidden border border-slate-200">
             <header class="bg-slate-900 p-8 text-white">
-                <h1 class="text-3xl font-extrabold tracking-tight italic text-blue-400">Financial <span class="text-white">Full Extractor</span></h1>
-                <p class="text-slate-400 mt-1">Supports PDF, PNG, and JPG TransUnion Reports</p>
+                <h1 class="text-3xl font-extrabold tracking-tight italic text-blue-400">Precision <span class="text-white">Extractor</span></h1>
+                <p class="text-slate-400 mt-1">High-accuracy OCR for PDF & Images (Excluding Statuses)</p>
             </header>
 
             <div class="p-6 md:p-8">
                 <div class="mb-8 p-10 border-2 border-dashed border-slate-300 bg-slate-50 rounded-2xl text-center hover:border-blue-500 hover:bg-blue-50 transition-all cursor-pointer">
-                    <input type="file" id="imageUpload" accept="image/*,application/pdf" class="hidden" multiple>
-                    <label for="imageUpload" class="cursor-pointer block">
-                        <div class="text-slate-700 font-bold text-xl">Upload Report (PDF or Images)</div>
-                        <div class="text-sm text-slate-500 mt-2 italic">Drag & drop your files here</div>
+                    <input type="file" id="fileUpload" accept="image/*,application/pdf" class="hidden" multiple>
+                    <label for="fileUpload" class="cursor-pointer block">
+                        <div class="text-slate-700 font-bold text-xl">Upload PDF or Images</div>
+                        <div class="text-sm text-slate-500 mt-2 italic">Optimized for TransUnion Statutory Reports</div>
                     </label>
                 </div>
 
                 <div id="status" class="hidden flex flex-col items-center py-10">
                     <div class="loader ease-linear rounded-full border-4 border-t-4 border-slate-200 h-12 w-12 mb-4"></div>
-                    <p class="text-slate-600 font-medium animate-pulse" id="statusText">Scanning...</p>
+                    <p class="text-slate-600 font-medium animate-pulse" id="statusText">Analyzing Documents...</p>
                 </div>
 
                 <div id="resultArea" class="hidden space-y-6">
@@ -41,17 +42,17 @@
                         
                         <div class="space-y-8">
                             <section>
-                                <h3 class="text-blue-400 font-bold uppercase text-xs mb-4">💳 Providers and Balances</h3>
+                                <h3 class="text-blue-400 font-bold uppercase text-xs mb-4">💳 Identified Accounts</h3>
                                 <div id="accountsList" class="space-y-2 border-l-2 border-slate-800 ml-2 pl-4"></div>
                             </section>
 
                             <section>
-                                <h3 class="text-red-400 font-bold uppercase text-xs mb-4">🏛️ Court Judgments (CCJs)</h3>
+                                <h3 class="text-red-400 font-bold uppercase text-xs mb-4">🏛️ Identified CCJs</h3>
                                 <div id="ccjList" class="space-y-4 border-l-2 border-slate-800 ml-2 pl-4"></div>
                             </section>
 
                             <div class="pt-6 border-t border-slate-700 flex justify-between items-end text-white">
-                                <span class="text-slate-400 font-bold uppercase tracking-widest text-xs">Total Outstanding Liabilities:</span>
+                                <span class="text-slate-400 font-bold uppercase tracking-widest text-xs">Total Liabilities:</span>
                                 <span id="totalValue" class="text-4xl font-black text-yellow-400">£0</span>
                             </div>
                         </div>
@@ -59,27 +60,31 @@
 
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <button onclick="window.print()" class="bg-white border-2 border-slate-200 py-3 rounded-xl font-bold hover:bg-slate-50">Print to PDF</button>
-                        <button id="copyBtn" class="bg-blue-600 text-white py-3 rounded-xl font-bold hover:bg-blue-700">Copy Summary Text</button>
+                        <button id="copyBtn" class="bg-blue-600 text-white py-3 rounded-xl font-bold hover:bg-blue-700">Copy Clean Summary</button>
                     </div>
                 </div>
             </div>
         </div>
     </div>
 
+    <canvas id="procCanvas" class="hidden-canvas"></canvas>
+
     <script>
         pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
 
-        const imageUpload = document.getElementById('imageUpload');
+        const fileUpload = document.getElementById('fileUpload');
         const status = document.getElementById('status');
         const statusText = document.getElementById('statusText');
         const resultArea = document.getElementById('resultArea');
         const accountsList = document.getElementById('accountsList');
         const ccjList = document.getElementById('ccjList');
         const totalValue = document.getElementById('totalValue');
+        const procCanvas = document.getElementById('procCanvas');
 
         let grandTotal = 0;
+        let seenItems = new Set(); // Prevent duplicates
 
-        imageUpload.addEventListener('change', async (e) => {
+        fileUpload.addEventListener('change', async (e) => {
             const files = e.target.files;
             if (!files.length) return;
 
@@ -88,15 +93,15 @@
             accountsList.innerHTML = '';
             ccjList.innerHTML = '';
             grandTotal = 0;
+            seenItems.clear();
 
-            for (let i = 0; i < files.length; i++) {
-                const file = files[i];
-                statusText.innerText = `Processing ${file.name}...`;
-
+            for (let file of files) {
+                statusText.innerText = `Reading ${file.name}...`;
                 if (file.type === "application/pdf") {
                     await processPdf(file);
                 } else {
-                    await processImage(file);
+                    const img = await loadImage(file);
+                    await processSource(img);
                 }
             }
 
@@ -105,53 +110,89 @@
             totalValue.innerText = `£${grandTotal.toLocaleString()}`;
         });
 
+        async function loadImage(file) {
+            return new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const img = new Image();
+                    img.onload = () => resolve(img);
+                    img.src = e.target.result;
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+
         async function processPdf(file) {
             const arrayBuffer = await file.arrayBuffer();
             const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
-            
             for (let i = 1; i <= pdf.numPages; i++) {
-                statusText.innerText = `Scanning PDF Page ${i} of ${pdf.numPages}...`;
+                statusText.innerText = `Scanning PDF Page ${i}/${pdf.numPages}...`;
                 const page = await pdf.getPage(i);
-                const viewport = page.getViewport({ scale: 2.0 });
-                const canvas = document.createElement('canvas');
-                const context = canvas.getContext('2d');
-                canvas.height = viewport.height;
-                canvas.width = viewport.width;
-
+                const viewport = page.getViewport({ scale: 2.5 }); // Higher scale for better OCR
+                const context = procCanvas.getContext('2d');
+                procCanvas.height = viewport.height;
+                procCanvas.width = viewport.width;
                 await page.render({ canvasContext: context, viewport: viewport }).promise;
-                await processImage(canvas);
+                await processSource(procCanvas);
             }
         }
 
-        async function processImage(source) {
+        async function processSource(source) {
+            // Apply Greyscale & Contrast for better OCR accuracy
+            const ctx = procCanvas.getContext('2d');
+            procCanvas.width = source.width || source.videoWidth;
+            procCanvas.height = source.height || source.videoHeight;
+            ctx.filter = 'grayscale(100%) contrast(150%)';
+            ctx.drawImage(source, 0, 0);
+
             const worker = await Tesseract.createWorker();
             await worker.loadLanguage('eng');
             await worker.initialize('eng');
             
-            const { data: { lines } } = await worker.recognize(source);
-            let currentJudgment = { case: null, amount: null };
+            // Layout analysis for better line grouping
+            await worker.setParameters({
+                tessedit_pageseg_mode: '6', // Assume a single uniform block of text
+            });
+
+            const { data: { lines } } = await worker.recognize(procCanvas);
+            let currentCCJCase = null;
 
             lines.forEach((line) => {
-                const text = line.text.trim();
+                const text = line.text.trim().replace(/\[.*?\]/g, ''); // Remove anything in brackets [Status]
 
+                // 1. IMPROVED CCJ DETECTION
                 const caseMatch = text.match(/([A-Z][A-Z0-9]{7,10})/);
-                if (caseMatch && !text.includes(" ")) currentJudgment.case = caseMatch[1];
+                if (caseMatch) currentCCJCase = caseMatch[1];
 
-                const ccjAmtMatch = text.match(/Amount\s*£([\d,]+)/i);
-                if (ccjAmtMatch) {
-                    currentJudgment.amount = parseFloat(ccjAmtMatch[1].replace(',', ''));
-                    addCCJRow(currentJudgment.case || "N/A", currentJudgment.amount);
-                    grandTotal += currentJudgment.amount;
-                    currentJudgment = { case: null, amount: null };
-                }
+                // Flexible amount detection (handles misread £ as E, B, or &)
+                const amtMatch = text.match(/(?:Amount|Balance)?\s*[£EB&]?\s*([\d,]+\.?\d*)/i);
+                
+                if (amtMatch) {
+                    const amountRaw = amtMatch[1].replace(/,/g, '');
+                    const amount = parseFloat(amountRaw);
 
-                const accountMatch = text.match(/([A-Za-z0-9\s&]{3,})\s*[—\-–]?\s*£([\d,]+)/);
-                if (accountMatch && !text.includes("Amount")) {
-                    const provider = accountMatch[1].trim();
-                    const amount = parseFloat(accountMatch[2].replace(',', ''));
-                    if (!isNaN(amount) && provider.length < 50 && !provider.match(/Date report/i)) {
-                        addAccountRow(provider, amount);
-                        grandTotal += amount;
+                    if (!isNaN(amount)) {
+                        // Check if it's a CCJ line
+                        if (text.toLowerCase().includes("amount") && currentCCJCase) {
+                            const key = `CCJ-${currentCCJCase}-${amount}`;
+                            if (!seenItems.has(key)) {
+                                addCCJRow(currentCCJCase, amount);
+                                grandTotal += amount;
+                                seenItems.add(key);
+                            }
+                        } 
+                        // Or a standard account line
+                        else {
+                            const provider = text.split(/[£EB&—\-–]/)[0].trim();
+                            if (provider.length > 2 && provider.length < 60 && !provider.toLowerCase().includes("page")) {
+                                const key = `ACC-${provider}-${amount}`;
+                                if (!seenItems.has(key)) {
+                                    addAccountRow(provider, amount);
+                                    grandTotal += amount;
+                                    seenItems.add(key);
+                                }
+                            }
+                        }
                     }
                 }
             });
@@ -172,22 +213,28 @@
             div.className = "bg-slate-800/40 p-3 rounded-lg border border-slate-700 ccj-row";
             div.setAttribute('data-case', caseNum);
             div.setAttribute('data-amount', amount.toLocaleString());
-            div.innerHTML = `<div class="flex justify-between"><span>CCJ (${caseNum})</span><span class="text-white font-bold">£${amount.toLocaleString()}</span></div>`;
+            div.innerHTML = `<div class="flex justify-between"><span>CCJ Case: ${caseNum}</span><span class="text-white font-bold">£${amount.toLocaleString()}</span></div>`;
             ccjList.appendChild(div);
         }
 
         document.getElementById('copyBtn').addEventListener('click', () => {
-            let output = "Financial Account Summary\n\n";
+            let output = "Financial Account Summary\n";
+            output += "==========================\n\n";
+            
+            output += "ACCOUNTS:\n";
             document.querySelectorAll('.account-row').forEach(el => {
                 output += `${el.getAttribute('data-name')} — £${el.getAttribute('data-price')}\n`;
             });
+
+            output += "\nCOURT JUDGMENTS:\n";
             document.querySelectorAll('.ccj-row').forEach(el => {
                 output += `CCJ Case ${el.getAttribute('data-case')} — £${el.getAttribute('data-amount')}\n`;
             });
-            output += `\nTotal Outstanding Liabilities — £${totalValue.innerText.replace('£', '')}`;
-            navigator.clipboard.writeText(output).then(() => {
-                alert('Summary copied as plain text!');
-            });
+
+            output += "\n==========================\n";
+            output += `TOTAL LIABILITIES: £${totalValue.innerText.replace('£', '')}`;
+
+            navigator.clipboard.writeText(output).then(() => alert('Summary copied!'));
         });
     </script>
 </body>
