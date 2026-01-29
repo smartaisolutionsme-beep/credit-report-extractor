@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Debt Extractor Pro V7</title>
+    <title>Debt Extractor Command Center V8</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src='https://unpkg.com/tesseract.js@v4.0.1/dist/tesseract.min.js'></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
@@ -17,51 +17,49 @@
         <div class="bg-white rounded-3xl shadow-2xl overflow-hidden border border-slate-200">
             <header class="bg-slate-900 p-8 text-white flex justify-between items-center">
                 <div>
-                    <h1 class="text-3xl font-extrabold tracking-tight text-blue-400 italic">Precision <span class="text-white">Debt Extractor</span></h1>
-                    <p class="text-slate-400 mt-1">Smart OCR with Memory & Corrections</p>
+                    <h1 class="text-3xl font-extrabold tracking-tight text-blue-400 italic">Precision <span class="text-white">Command Center</span></h1>
+                    <p class="text-slate-400 mt-1">Auto-Labeling CCJs & Intelligent Prompting</p>
                 </div>
-                <button onclick="clearAllData()" class="bg-red-500/10 hover:bg-red-500/20 text-red-400 px-4 py-2 rounded-xl text-xs font-bold uppercase transition-all">Clear All</button>
+                <button onclick="clearAllData()" class="bg-red-500/10 hover:bg-red-500/20 text-red-400 px-4 py-2 rounded-xl text-xs font-bold uppercase">Clear History</button>
             </header>
 
             <div class="p-6 md:p-8">
-                <div class="mb-8 p-12 border-4 border-dashed border-slate-200 bg-slate-50 rounded-3xl text-center hover:border-blue-400 hover:bg-blue-50 transition-all cursor-pointer">
+                <div class="mb-6 bg-blue-50 p-6 rounded-2xl border border-blue-100">
+                    <h3 class="text-blue-800 font-bold text-sm mb-2 flex items-center">
+                        <span class="mr-2">⚡</span> Command Prompt
+                    </h3>
+                    <div class="flex gap-2">
+                        <input type="text" id="cmdInput" placeholder="Try: 'Rename Active to CCJ' or 'Change 622 to Perch Capital'" class="flex-1 p-3 rounded-xl border border-blue-200 focus:ring-2 focus:ring-blue-400 outline-none">
+                        <button onclick="executeCommand()" class="bg-blue-600 text-white px-6 rounded-xl font-bold hover:bg-blue-700">Run</button>
+                    </div>
+                    <p class="text-[10px] text-blue-400 mt-2 italic">Commands supported: **Rename**, **Replace**, **Change**, or simply **Add**.</p>
+                </div>
+
+                <div class="mb-8 p-10 border-4 border-dashed border-slate-200 bg-slate-50 rounded-3xl text-center hover:border-blue-400 cursor-pointer">
                     <input type="file" id="fileIn" accept="image/*,application/pdf" class="hidden" multiple>
                     <label for="fileIn" class="cursor-pointer block">
-                        <div class="text-slate-800 font-bold text-2xl">Upload New Files</div>
-                        <p class="text-slate-500 mt-2">PDFs and Screenshots (History is auto-saved)</p>
+                        <div class="text-slate-800 font-bold text-xl">Upload Documents</div>
+                        <p class="text-slate-500 mt-1">Automatically identifies CCJs from headings</p>
                     </label>
                 </div>
 
-                <div class="mb-8 bg-blue-50 p-6 rounded-2xl border border-blue-100">
-                    <h3 class="text-blue-800 font-bold text-sm mb-2 flex items-center">
-                        <span class="mr-2">💡</span> Omission Correction Prompt
-                    </h3>
-                    <div class="flex gap-2">
-                        <input type="text" id="correctionInput" placeholder="e.g. Perch Capital 622 or Court Judgment 3163" class="flex-1 p-3 rounded-xl border border-blue-200 focus:outline-none focus:ring-2 focus:ring-blue-400">
-                        <button onclick="handleManualPrompt()" class="bg-blue-600 text-white px-6 rounded-xl font-bold hover:bg-blue-700 transition-all">Add</button>
-                    </div>
-                    <p class="text-[10px] text-blue-400 mt-2 italic">Type provider name and amount to resolve omissions immediately.</p>
-                </div>
-
-                <div id="status" class="hidden flex flex-col items-center py-10">
-                    <div class="loader ease-linear rounded-full border-8 border-t-8 border-slate-200 h-16 w-16 mb-4"></div>
-                    <p class="text-slate-600 font-bold" id="statusText">Scanning...</p>
+                <div id="status" class="hidden flex flex-col items-center py-6">
+                    <div class="loader ease-linear rounded-full border-4 border-t-4 border-slate-200 h-10 w-10 mb-2"></div>
+                    <p class="text-slate-600 text-sm font-bold" id="statusText">Analyzing Patterns...</p>
                 </div>
 
                 <div id="resArea" class="space-y-6">
                     <div class="bg-slate-900 rounded-2xl p-8 text-slate-300 font-mono text-sm">
                         <div class="border-b border-slate-800 pb-4 mb-6">
-                            <h2 class="text-white text-xl font-bold italic">Current Verified Liabilities</h2>
+                            <h2 class="text-white text-xl font-bold">Verified Outstanding Debt</h2>
                         </div>
-                        
                         <div id="extractedContent" class="space-y-2"></div>
-
                         <div class="mt-8 pt-6 border-t border-slate-700 flex justify-between items-end">
-                            <span class="text-slate-500 font-bold uppercase tracking-widest text-xs">Total Outstanding</span>
+                            <span class="text-slate-500 font-bold uppercase tracking-widest text-xs">Total Balance</span>
                             <span id="grandTotal" class="text-5xl font-black text-yellow-400">£0</span>
                         </div>
                     </div>
-                    <button id="copyBtn" class="w-full bg-blue-600 text-white py-4 rounded-2xl font-bold hover:bg-blue-700 shadow-lg">Copy Summary to Clipboard</button>
+                    <button id="copyBtn" class="w-full bg-slate-800 text-white py-4 rounded-2xl font-bold hover:bg-slate-700">Copy Summary</button>
                 </div>
             </div>
         </div>
@@ -70,30 +68,19 @@
 
     <script>
         pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
-        
-        const fileIn = document.getElementById('fileIn');
-        const status = document.getElementById('status');
-        const statusText = document.getElementById('statusText');
+        let dataHistory = JSON.parse(localStorage.getItem('debtHistoryV8')) || [];
         const extractedContent = document.getElementById('extractedContent');
         const grandTotalDisplay = document.getElementById('grandTotal');
-        const canvas = document.getElementById('canvas');
-        const correctionInput = document.getElementById('correctionInput');
 
-        let dataHistory = JSON.parse(localStorage.getItem('debtHistory')) || [];
-
-        // Load History on Start
         window.onload = renderAll;
 
-        fileIn.addEventListener('change', async (e) => {
-            const files = e.target.files;
-            if (!files.length) return;
-            status.classList.remove('hidden');
-            for (let file of files) {
-                statusText.innerText = `Processing: ${file.name}`;
+        document.getElementById('fileIn').addEventListener('change', async (e) => {
+            document.getElementById('status').classList.remove('hidden');
+            for (let file of e.target.files) {
                 if (file.type === "application/pdf") await handlePdf(file);
                 else await handleImage(file);
             }
-            status.classList.add('hidden');
+            document.getElementById('status').classList.add('hidden');
             saveAndRender();
         });
 
@@ -120,46 +107,60 @@
 
         async function processOCR(src) {
             const worker = await Tesseract.createWorker();
-            await worker.loadLanguage('eng');
-            await worker.initialize('eng');
+            await worker.loadLanguage('eng'); await worker.initialize('eng');
             const { data: { lines } } = await worker.recognize(src);
             
+            let isCCJSection = false;
+
             for (let i = 0; i < lines.length; i++) {
                 let text = lines[i].text.trim();
+                
+                // Detect CCJ Heading
+                if (text.match(/County Court Judgment|Judgments/i)) isCCJSection = true;
+                
+                // Detect Balances
                 if (text.match(/Balance|Amount owed|Amount/i)) {
-                    let amt = null; let prov = "Account";
-                    const sameLine = text.match(/[£EB&]?\s*([\d,]{2,10}(?:\.\d{2})?)/);
+                    let amt = null;
+                    const sameLine = text.match(/([\d,]{2,10}(?:\.\d{2})?)/);
                     let nextLine = (i + 1 < lines.length) ? lines[i+1].text.trim() : "";
                     const nextLineMatch = nextLine.match(/^[\d,]{2,10}(?:\.\d{2})?$/);
 
-                    if (sameLine && parseFloat(sameLine[1].replace(/,/g,'')) > 5) {
-                        amt = parseFloat(sameLine[1].replace(/,/g,''));
-                        prov = text.split(/Balance|Amount/i)[0].trim() || (i > 0 ? lines[i-1].text.trim() : "Account");
-                    } else if (nextLineMatch) {
-                        amt = parseFloat(nextLineMatch[0].replace(/,/g,''));
-                        prov = (i > 0) ? lines[i-1].text.trim() : "Account";
-                    }
+                    if (sameLine) amt = parseFloat(sameLine[1].replace(/,/g,''));
+                    else if (nextLineMatch) amt = parseFloat(nextLineMatch[0].replace(/,/g,''));
 
-                    if (amt && amt < 100000 && ![2024, 2025, 2026].includes(amt)) {
-                        addToData(prov.replace(/ORGANISATION|STATUS|UPDATED/gi, '').trim(), amt);
+                    if (amt && amt < 100000 && amt > 1 && ![2024, 2025, 2026].includes(amt)) {
+                        let name = isCCJSection ? "CCJ" : (text.split(/Balance|Amount/i)[0].trim() || lines[i-1].text.trim());
+                        addToData(name.replace(/STATUS|ACTIVE|UPDATED/gi, '').trim(), amt);
+                        if (isCCJSection) isCCJSection = false; // Reset for next section
                     }
                 }
             }
             await worker.terminate();
         }
 
-        function handleManualPrompt() {
-            const input = correctionInput.value;
-            const amountMatch = input.match(/(\d[\d,.]*)/);
-            if (amountMatch) {
-                const amount = parseFloat(amountMatch[0].replace(/,/g, ''));
-                const name = input.replace(amountMatch[0], '').trim() || "Manual Entry";
-                addToData(name, amount);
-                correctionInput.value = "";
-                saveAndRender();
-            } else {
-                alert("Please include an amount (e.g. 'Perch Capital 622')");
+        function executeCommand() {
+            const input = document.getElementById('cmdInput').value.toLowerCase();
+            
+            // RENAME COMMAND: "Rename Active to CCJ"
+            if (input.includes("rename") || input.includes("change")) {
+                const parts = input.split(/rename|change|to/);
+                const oldName = parts[1].trim();
+                const newName = parts[2].trim();
+                dataHistory.forEach(item => {
+                    if (item.name.toLowerCase().includes(oldName)) item.name = newName.toUpperCase();
+                });
+            } 
+            // ADD/REPLACE LOGIC
+            else {
+                const amountMatch = input.match(/(\d[\d,.]*)/);
+                if (amountMatch) {
+                    const amt = parseFloat(amountMatch[0].replace(/,/g, ''));
+                    const name = input.replace(amountMatch[0], '').replace(/add|replace/g, '').trim();
+                    addToData(name.toUpperCase(), amt);
+                }
             }
+            document.getElementById('cmdInput').value = "";
+            saveAndRender();
         }
 
         function addToData(name, amount) {
@@ -174,15 +175,10 @@
             saveAndRender();
         }
 
-        function clearAllData() {
-            if(confirm("Clear all history?")) {
-                dataHistory = [];
-                saveAndRender();
-            }
-        }
+        function clearAllData() { if(confirm("Clear history?")) { dataHistory = []; saveAndRender(); } }
 
         function saveAndRender() {
-            localStorage.setItem('debtHistory', JSON.stringify(dataHistory));
+            localStorage.setItem('debtHistoryV8', JSON.stringify(dataHistory));
             renderAll();
         }
 
@@ -195,10 +191,10 @@
                 row.className = "flex justify-between items-center py-2 border-b border-slate-800/40 px-2 group";
                 row.innerHTML = `
                     <div class="flex flex-col">
-                        <span class="text-slate-400 uppercase text-[10px] font-bold">${item.name}</span>
+                        <span class="text-slate-500 uppercase text-[10px] font-bold">${item.name}</span>
                         <span class="text-white font-black text-lg">£${item.amount.toLocaleString()}</span>
                     </div>
-                    <button onclick="removeItem(${item.id})" class="text-slate-600 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100">✕</button>
+                    <button onclick="removeItem(${item.id})" class="text-slate-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all">✕</button>
                 `;
                 extractedContent.appendChild(row);
             });
@@ -206,10 +202,10 @@
         }
 
         document.getElementById('copyBtn').addEventListener('click', () => {
-            let log = "DEBT REPORT SUMMARY\n====================\n\n";
+            let log = "DEBT REPORT\n-----------\n";
             dataHistory.forEach(item => log += `${item.name}: £${item.amount.toLocaleString()}\n`);
             log += `\nTOTAL: ${grandTotalDisplay.innerText}`;
-            navigator.clipboard.writeText(log).then(() => alert("Report Copied!"));
+            navigator.clipboard.writeText(log).then(() => alert("Copied!"));
         });
     </script>
 </body>
