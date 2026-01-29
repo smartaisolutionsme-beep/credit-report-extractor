@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Financial Report Extractor Ultra</title>
+    <title>Financial Extractor Intelligence V5</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src='https://unpkg.com/tesseract.js@v4.0.1/dist/tesseract.min.js'></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
@@ -12,47 +12,45 @@
         @keyframes spinner { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
 </head>
-<body class="bg-slate-100 min-h-screen p-4 md:p-8 font-sans">
+<body class="bg-slate-50 min-h-screen p-4 md:p-8 font-sans">
     <div class="max-w-4xl mx-auto">
         <div class="bg-white rounded-3xl shadow-2xl overflow-hidden border border-slate-200">
-            <header class="bg-slate-900 p-8 text-white flex justify-between items-center">
-                <div>
-                    <h1 class="text-3xl font-extrabold tracking-tight text-blue-400 italic">Financial <span class="text-white">Master Extractor</span></h1>
-                    <p class="text-slate-400 mt-1">Universal OCR for PDFs and Screenshots</p>
-                </div>
-                <button onclick="location.reload()" class="bg-slate-800 hover:bg-slate-700 p-2 rounded-lg text-xs font-bold uppercase tracking-wider">Reset App</button>
+            <header class="bg-slate-900 p-8 text-white">
+                <h1 class="text-3xl font-extrabold tracking-tight text-blue-400 italic">Intelligent <span class="text-white">Debt Analyzer</span></h1>
+                <p class="text-slate-400 mt-1">Filtering Case IDs from financial totals</p>
             </header>
 
             <div class="p-6 md:p-8">
                 <div class="mb-8 p-12 border-4 border-dashed border-slate-200 bg-slate-50 rounded-3xl text-center hover:border-blue-400 hover:bg-blue-50 transition-all cursor-pointer">
                     <input type="file" id="fileIn" accept="image/*,application/pdf" class="hidden" multiple>
                     <label for="fileIn" class="cursor-pointer block">
-                        <div class="text-slate-400 mb-4"><svg class="w-12 h-12 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg></div>
-                        <div class="text-slate-800 font-bold text-2xl">Drop Credit Report Files Here</div>
-                        <p class="text-slate-500 mt-2 italic">Supports TransUnion Statutory PDFs & Portal Screenshots</p>
+                        <div class="text-slate-800 font-bold text-2xl">Upload Credit Reports</div>
+                        <p class="text-slate-500 mt-2 italic">Automatically excludes Case IDs and reference numbers from calculations</p>
                     </label>
                 </div>
 
                 <div id="status" class="hidden flex flex-col items-center py-10">
-                    <div class="loader ease-linear rounded-full border-8 border-t-8 border-slate-200 h-20 w-20 mb-4"></div>
-                    <p class="text-slate-600 font-bold text-xl animate-pulse" id="statusText">Analyzing Documents...</p>
+                    <div class="loader ease-linear rounded-full border-8 border-t-8 border-slate-200 h-16 w-16 mb-4"></div>
+                    <p class="text-slate-600 font-bold animate-pulse" id="statusText">Verifying Data Patterns...</p>
                 </div>
 
                 <div id="resArea" class="hidden space-y-6">
-                    <div class="bg-slate-900 rounded-2xl p-8 text-slate-300 font-mono text-sm shadow-inner">
-                        <div class="flex justify-between items-center mb-6 border-b border-slate-800 pb-4">
-                            <h2 class="text-white text-xl font-bold">Extraction Summary</h2>
-                            <span class="bg-blue-500/20 text-blue-400 px-3 py-1 rounded-full text-xs font-bold uppercase">Ready</span>
+                    <div class="bg-slate-900 rounded-2xl p-8 text-slate-300 font-mono text-sm">
+                        <div class="border-b border-slate-800 pb-4 mb-6">
+                            <h2 class="text-white text-xl font-bold">Verified Liabilities</h2>
                         </div>
                         
                         <div id="extractedContent" class="space-y-3"></div>
 
                         <div class="mt-8 pt-6 border-t border-slate-700 flex justify-between items-end">
-                            <span class="text-slate-500 font-bold uppercase tracking-widest text-xs">Total Liabilities Identified:</span>
+                            <div>
+                                <span class="text-slate-500 font-bold uppercase tracking-widest text-[10px] block">Verified Grand Total</span>
+                                <span class="text-xs text-blue-400 italic">(Excluding IDs and reference codes)</span>
+                            </div>
                             <span id="grandTotal" class="text-5xl font-black text-yellow-400">£0</span>
                         </div>
                     </div>
-                    <button id="copyBtn" class="w-full bg-blue-600 text-white py-5 rounded-2xl font-black text-lg hover:bg-blue-700 shadow-xl transform active:scale-[0.98] transition-all">Copy Everything to Clipboard</button>
+                    <button id="copyBtn" class="w-full bg-blue-600 text-white py-4 rounded-2xl font-bold hover:bg-blue-700">Copy Summary to Clipboard</button>
                 </div>
             </div>
         </div>
@@ -71,7 +69,7 @@
         const canvas = document.getElementById('canvas');
 
         let totalAmount = 0;
-        let seen = new Set();
+        let seenItems = new Set();
 
         fileIn.addEventListener('change', async (e) => {
             const files = e.target.files;
@@ -81,10 +79,10 @@
             resArea.classList.add('hidden');
             extractedContent.innerHTML = '';
             totalAmount = 0;
-            seen.clear();
+            seenItems.clear();
 
             for (let file of files) {
-                statusText.innerText = `Processing: ${file.name}`;
+                statusText.innerText = `Analyzing: ${file.name}`;
                 if (file.type === "application/pdf") {
                     await handlePdf(file);
                 } else {
@@ -128,45 +126,46 @@
             await worker.initialize('eng');
             const { data: { lines } } = await worker.recognize(src);
             
-            let lastProvider = "";
-            let potentialCaseID = "";
+            let currentCaseID = "";
 
             for (let i = 0; i < lines.length; i++) {
-                const text = lines[i].text.trim().replace(/\[.*?\]/g, ''); // Remove [Status] tags
+                let text = lines[i].text.trim().replace(/\[.*?\]/g, ''); 
                 if (!text) continue;
 
-                // 1. CATCH CASE IDs (For CCJs)
-                const caseMatch = text.match(/(?:Case ID|CASE NUMBER)\s*([A-Z0-9]{7,12})/i) || text.match(/^([A-Z0-9]{7,12})$/);
-                if (caseMatch) potentialCaseID = caseMatch[1];
+                // 1. Identify Case IDs (Keep them for display but flag them as NOT for calculation)
+                const caseMatch = text.match(/([A-Z0-9]{7,12})/);
+                if (caseMatch && text.match(/[A-Z]/) && text.match(/[0-9]/)) {
+                    currentCaseID = caseMatch[1];
+                }
 
-                // 2. DETECT CURRENCY OR RAW NUMBERS AFTER KEYWORDS
-                const amountMatch = text.match(/(?:Balance|Amount owed|Amount)?\s*[£EB&]?\s*([\d,]{1,8}(?:\.\d{2})?)/i);
+                // 2. Identify Amounts (Must have currency symbol or follow "Balance/Amount")
+                // EXCLUSION LOGIC: If the amount is exactly the same as the Case ID, ignore it.
+                const amountMatch = text.match(/(?:Balance|Amount owed|Amount)?\s*[£EB&]\s*([\d,]+(?:\.\d{2})?)/i);
                 
                 if (amountMatch) {
                     const rawVal = amountMatch[1].replace(/,/g, '');
                     const amount = parseFloat(rawVal);
                     
-                    // Filter: Ignore dates (like 2026), ignore small codes, ignore if amount is 0
-                    if (!isNaN(amount) && amount > 0 && !text.match(/20\d{2}/)) {
+                    // Logic to ensure we don't add IDs or years (like 2024, 2025)
+                    if (!isNaN(amount) && amount > 0 && amount < 100000 && !text.match(/20\d{2}/)) {
                         
-                        let name = "";
-                        if (potentialCaseID) {
-                            name = `Court Judgment (${potentialCaseID})`;
-                            potentialCaseID = ""; // Reset after use
+                        let provider = "";
+                        if (currentCaseID && text.toLowerCase().includes("amount")) {
+                            provider = `Court Judgment (${currentCaseID})`;
+                            currentCaseID = ""; // Reset to prevent double tagging
                         } else {
-                            // Extract name: Part of text before "Balance" or the line above it
-                            name = text.split(/(?:Balance|Amount owed|Amount|£|E|B|&)/i)[0].trim();
-                            if (!name && i > 0) name = lines[i-1].text.trim();
+                            provider = text.split(/[£EB&]/)[0].trim() || (i > 0 ? lines[i-1].text.trim() : "Unknown Provider");
                         }
 
-                        // Final cleaning and deduplication
-                        name = name.replace(/ORGANISATION|BALANCE|UPDATED|STATUS/gi, '').trim();
-                        if (name.length > 2 && name.length < 50) {
-                            const key = `${name}-${amount}`;
-                            if (!seen.has(key)) {
-                                renderRow(name, amount);
+                        // Sanitize Provider Name
+                        provider = provider.replace(/ORGANISATION|BALANCE|UPDATED|STATUS|TOTAL/gi, '').trim();
+
+                        if (provider.length > 2 && provider.length < 50) {
+                            const uniqueKey = `${provider}-${amount}`;
+                            if (!seenItems.has(uniqueKey)) {
+                                addEntry(provider, amount);
                                 totalAmount += amount;
-                                seen.add(key);
+                                seenItems.add(uniqueKey);
                             }
                         }
                     }
@@ -175,19 +174,19 @@
             await worker.terminate();
         }
 
-        function renderRow(label, val) {
+        function addEntry(label, val) {
             const div = document.createElement('div');
-            div.className = "flex justify-between items-center py-2 border-b border-slate-800/50 hover:bg-slate-800/30 px-2 rounded transition-colors item-entry";
-            div.setAttribute('data-text', `${label} — £${val.toLocaleString()}`);
+            div.className = "flex justify-between items-center py-2 border-b border-slate-800/50 hover:bg-slate-800/30 px-2 rounded item-row";
+            div.setAttribute('data-copy', `${label} — £${val.toLocaleString()}`);
             div.innerHTML = `<span class="text-slate-400 font-medium">${label}</span><span class="text-white font-bold">£${val.toLocaleString()}</span>`;
             extractedContent.appendChild(div);
         }
 
         document.getElementById('copyBtn').addEventListener('click', () => {
             let log = "FINANCIAL SUMMARY\n=================\n\n";
-            document.querySelectorAll('.item-entry').forEach(el => log += el.getAttribute('data-text') + "\n");
-            log += `\nTOTAL OUTSTANDING: £${totalAmount.toLocaleString()}`;
-            navigator.clipboard.writeText(log).then(() => alert("All extracted data copied to clipboard!"));
+            document.querySelectorAll('.item-row').forEach(el => log += el.getAttribute('data-copy') + "\n");
+            log += `\nGRAND TOTAL: £${totalAmount.toLocaleString()}`;
+            navigator.clipboard.writeText(log).then(() => alert("Verified data copied!"));
         });
     </script>
 </body>
